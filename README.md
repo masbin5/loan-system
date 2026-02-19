@@ -49,3 +49,7 @@ cp .env.example .env
 php artisan key:generate
 php artisan migrate
 php artisan serve
+
+## Entity Relationship Diagram (ERD)
+
+![ERD](docs/ERD-loan-system.png)

@@ -7,6 +7,8 @@ use Illuminate\Http\Request;
 use App\Models\Loan;
 use App\Services\LoanService;
 use Illuminate\Support\Facades\Auth;
+use App\Http\Requests\ApplyLoanRequest;
+
 
 class LoanController extends Controller
 {
@@ -22,25 +24,15 @@ class LoanController extends Controller
     | Apply Loan (Borrower)
     |--------------------------------------------------------------------------
     */
-
-    public function apply(Request $request)
+    public function apply(ApplyLoanRequest $request)
     {
-        $request->validate([
-            'amount' => 'required|numeric|min:1000',
-            'duration_month' => 'required|integer|min:1',
-            'interest_rate' => 'required|numeric|min:0',
-        ]);
-
-        $loan = Loan::create([
-            'user_id' => Auth::id(),
-            'amount' => $request->amount,
-            'duration_month' => $request->duration_month,
-            'interest_rate' => $request->interest_rate,
-            'status' => 'pending',
-        ]);
+        $loan = $this->loanService->createLoan(
+            $request->validated(),
+            auth()->id()
+        );
 
         return response()->json([
-            'message' => 'Loan application submitted',
+            'message' => 'Loan application submitted successfully',
             'data' => $loan
         ], 201);
     }
@@ -50,34 +42,22 @@ class LoanController extends Controller
     | Approve Loan (Admin Only)
     |--------------------------------------------------------------------------
     */
-
     public function approve($id)
     {
         $loan = Loan::findOrFail($id);
 
-        if (Auth::user()->role !== 'admin') {
+        // Validasi role admin
+        if (auth()->user()->role !== 'admin') {
             return response()->json([
                 'message' => 'Unauthorized'
             ], 403);
         }
 
-        if ($loan->status !== 'pending') {
-            return response()->json([
-                'message' => 'Loan already processed'
-            ], 400);
-        }
-
-        $loan->update([
-            'status' => 'approved',
-            'approved_at' => now(),
-        ]);
-
-        // Generate Installments
-        $this->loanService->generateInstallments($loan);
+        $loan = $this->loanService->approveLoan($loan);
 
         return response()->json([
             'message' => 'Loan approved successfully',
-            'data' => $loan->load('installments')
+            'data' => $loan
         ]);
     }
 
@@ -86,13 +66,9 @@ class LoanController extends Controller
     | Loan History (Borrower)
     |--------------------------------------------------------------------------
     */
-
     public function history()
     {
-        $loans = Loan::with('installments')
-            ->where('user_id', Auth::id())
-            ->latest()
-            ->get();
+        $loans = $this->loanService->getUserLoans(auth()->id());
 
         return response()->json($loans);
     }

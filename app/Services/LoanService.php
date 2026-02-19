@@ -2,34 +2,49 @@
 
 namespace App\Services;
 
-use App\Models\Installment;
-use Carbon\Carbon;
+use App\Models\Loan;
 
 class LoanService
 {
-    public function generateInstallments($loan)
+    public function createLoan(array $data, $userId)
     {
-        $principal = $loan->amount;
-        $interestRate = $loan->interest_rate / 100;
-        $months = $loan->duration_month;
+        return Loan::create([
+            'user_id' => $userId,
+            'amount' => $data['amount'],
+            'duration_month' => $data['duration_month'],
+            'interest_rate' => $data['interest_rate'],
+            'status' => 'pending',
+        ]);
+    }
 
-        // Total bunga
-        $totalInterest = $principal * $interestRate;
-
-        // Total bayar
-        $totalPayment = $principal + $totalInterest;
-
-        // Cicilan per bulan
-        $monthlyPayment = $totalPayment / $months;
-
-        for ($i = 1; $i <= $months; $i++) {
-            Installment::create([
-                'loan_id' => $loan->id,
-                'installment_number' => $i,
-                'amount' => $monthlyPayment,
-                'due_date' => Carbon::now()->addMonths($i),
-                'status' => 'unpaid',
-            ]);
+    public function approveLoan(Loan $loan)
+    {
+        if ($loan->status !== 'pending') {
+            throw new \Exception('Loan already processed');
         }
+
+        $loan->update([
+            'status' => 'approved',
+            'approved_at' => now(),
+        ]);
+
+        // generate cicilan
+        $this->generateInstallments($loan);
+
+        return $loan->load('installments');
+    }
+
+    public function getUserLoans($userId)
+    {
+        return Loan::with('installments')
+            ->where('user_id', $userId)
+            ->latest()
+            ->get();
+    }
+
+    public function generateInstallments(Loan $loan)
+    {
+        // logic cicilan (sementara dummy)
+        return true;
     }
 }
